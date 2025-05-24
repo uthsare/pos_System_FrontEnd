@@ -11,3 +11,7 @@ export function formatDate(date: Date | string) {
   }
   return new Intl.DateTimeFormat('en-US').format(date)
 }
+
+export const formatCurrency = (amount: number | null | undefined): string => {
+  return `$${(amount ?? 0).toFixed(2)}`;
+};

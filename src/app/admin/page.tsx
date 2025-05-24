@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { formatCurrency } from "@/lib/utils";
 import {
   Card,
   CardHeader,
@@ -26,14 +27,27 @@ import {
   LineChart,
 } from "recharts";
 
+interface CashFlowData {
+  date: string;
+  amount: number;
+}
+
+interface ChartProps extends React.HTMLAttributes<HTMLDivElement> {
+  data: any[]; // TODO: Add more specific type based on your data structure
+}
+
+interface PieChartProps extends React.HTMLAttributes<HTMLDivElement> {
+  data: Record<string, number>;
+}
+
 export default function Page() {
-  const [totalRevenue, setTotalRevenue] = useState(0);
-  const [totalExpenses, setTotalExpenses] = useState(0);
-  const [totalProfit, setTotalProfit] = useState(0);
-  const [cashFlow, setCashFlow] = useState<{ date: string; amount: unknown }[]>([]);
-  const [revenueByCategory, setRevenueByCategory] = useState({});
-  const [expensesByCategory, setExpensesByCategory] = useState({});
-  const [profitMargin, setProfitMargin] = useState([]);
+  const [totalRevenue, setTotalRevenue] = useState<number | null>(0);
+  const [totalExpenses, setTotalExpenses] = useState<number | null>(0);
+  const [totalProfit, setTotalProfit] = useState<number | null>(0);
+  const [cashFlow, setCashFlow] = useState<CashFlowData[]>([]);
+  const [revenueByCategory, setRevenueByCategory] = useState<Record<string, number>>({});
+  const [expensesByCategory, setExpensesByCategory] = useState<Record<string, number>>({});
+  const [profitMargin, setProfitMargin] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -57,6 +71,14 @@ export default function Page() {
           fetch('/api/admin/profit/margin')
         ]);
 
+        // Check if any response is not ok
+        const responses = [revenueRes, expensesRes, profitRes, cashFlowRes, revenueByCategoryRes, expensesByCategoryRes, profitMarginRes];
+        for (const response of responses) {
+          if (!response.ok) {
+            throw new Error(`API call failed: ${response.statusText}`);
+          }
+        }
+
         const revenue = await revenueRes.json();
         const expenses = await expensesRes.json();
         const profit = await profitRes.json();
@@ -65,15 +87,27 @@ export default function Page() {
         const expensesByCategoryData = await expensesByCategoryRes.json();
         const profitMarginData = await profitMarginRes.json();
 
-        setTotalRevenue(revenue.totalRevenue);
-        setTotalExpenses(expenses.totalExpenses);
-        setTotalProfit(profit.totalProfit);
-        setCashFlow(Object.entries(cashFlowData.cashFlow).map(([date, amount]) => ({ date, amount })));
-        setRevenueByCategory(revenueByCategoryData.revenueByCategory);
-        setExpensesByCategory(expensesByCategoryData.expensesByCategory);
-        setProfitMargin(profitMarginData.profitMargin);
+        setTotalRevenue(revenue?.totalRevenue ?? 0);
+        setTotalExpenses(expenses?.totalExpenses ?? 0);
+        setTotalProfit(profit?.totalProfit ?? 0);        setCashFlow(
+          Object.entries(cashFlowData?.cashFlow ?? {}).map(([date, amount]) => ({ 
+            date, 
+            amount: typeof amount === 'number' ? amount : 0
+          }))
+        );
+        setRevenueByCategory(revenueByCategoryData?.revenueByCategory ?? {});
+        setExpensesByCategory(expensesByCategoryData?.expensesByCategory ?? {});
+        setProfitMargin(profitMarginData?.profitMargin ?? []);
       } catch (error) {
         console.error('Error fetching data:', error);
+        // You might want to show an error state here
+        setTotalRevenue(0);
+        setTotalExpenses(0);
+        setTotalProfit(0);
+        setCashFlow([]);
+        setRevenueByCategory({});
+        setExpensesByCategory({});
+        setProfitMargin([]);
       } finally {
         setLoading(false);
       }
@@ -99,7 +133,7 @@ export default function Page() {
             <DollarSignIcon className="w-4 h-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${totalRevenue.toFixed(2)}</div>
+            <div className="text-2xl font-bold">{formatCurrency(totalRevenue)}</div>
           </CardContent>
         </Card>
         <Card>
@@ -110,7 +144,7 @@ export default function Page() {
             <DollarSignIcon className="w-4 h-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${totalExpenses.toFixed(2)}</div>
+            <div className="text-2xl font-bold">{formatCurrency(totalExpenses)}</div>
           </CardContent>
         </Card>
         <Card>
@@ -119,7 +153,7 @@ export default function Page() {
             <DollarSignIcon className="w-4 h-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${totalProfit.toFixed(2)}</div>
+            <div className="text-2xl font-bold">{formatCurrency(totalProfit)}</div>
           </CardContent>
         </Card>
       </div>
@@ -190,7 +224,7 @@ function BarChartIcon(props: any) {
   );
 }
 
-function BarchartChart({ data, ...props }: { data: any[] } & React.HTMLAttributes<HTMLDivElement>) {
+function BarchartChart({ data = [], ...props }: ChartProps) {
   const chartConfig = {
     margin: {
       label: "Margin",
@@ -240,7 +274,7 @@ function DollarSignIcon(props: any) {
   );
 }
 
-function LinechartChart({ data, ...props }: { data: any[] } & React.HTMLAttributes<HTMLDivElement>) {
+function LinechartChart({ data = [], ...props }: ChartProps) {
   return (
     <div {...props}>
       <ChartContainer
@@ -304,15 +338,15 @@ function PieChartIcon(props: any) {
   );
 }
 
-function PiechartcustomChart({ data, ...props }: { data: Record<string, number> } & React.HTMLAttributes<HTMLDivElement>) {
-  const chartData = Object.entries(data).map(([category, value]) => ({
+function PiechartcustomChart({ data = {}, ...props }: PieChartProps) {
+  const chartData = Object.entries(data || {}).map(([category, value]) => ({
     category,
-    value,
+    value: value ?? 0,
     fill: `var(--color-${category})`,
   }));
 
   const chartConfig = Object.fromEntries(
-    Object.keys(data).map((category, index) => [
+    Object.keys(data || {}).map((category, index) => [
       category,
       {
         label: category,
